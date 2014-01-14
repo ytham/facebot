@@ -1,6 +1,6 @@
 var video = document.getElementById('video');
 var canvas = document.getElementById('canvas');
-var fps = 10;
+var fps = 20;
 var context = canvas.getContext('2d');
 var width = 640;
 var height = 0;
