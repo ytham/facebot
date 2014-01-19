@@ -9,6 +9,8 @@ var circle_x = 0;
 var circle_y = 0;
 var circle_size = 1;
 
+var lastFace;
+
 var socket = io.connect();
 socket.on('start', function (data) {
   console.log(data);
@@ -20,15 +22,19 @@ socket.on('ellipse', function (data) {
   circle_size = data.size;
 });
 
-socket.on('faces', function (faces) {
-  for (var i = 0; i < faces.length; i++) {
-    var face = faces[i];
-    context.beginPath();
-    context.rect(face.x, face.y, face.width, face.height);
-    context.lineWidth = 3;
-    context.strokeStyle = '#FF0000';
-    context.stroke();
+socket.on('face', function (face) {
+  // for (var i = 0; i < faces.length; i++) {
+  //   var face = faces[i];
+  if (typeof lastFace !== 'undefined') {
+    face = smoothFaceValues(face, lastFace);
   }
+  context.beginPath();
+  context.rect(face.x, face.y, face.width, face.height);
+  context.lineWidth = 3;
+  context.strokeStyle = '#FF0000';
+  context.stroke();
+  lastFace = face;
+  //}
 });
 
 navigator.getMedia = ( navigator.getUserMedia || 
@@ -67,6 +73,15 @@ function emitFrame () {
 setInterval(function () {
   emitFrame();
 }, 1000/fps);
+
+function smoothFaceValues(face, lastFace) {
+  var returnedFace = {};
+  returnedFace.x = (face.x * (3/3)) + (lastFace.x * (0/3));
+  returnedFace.y = (face.y * (3/3)) + (lastFace.y * (0/3));
+  returnedFace.height = (face.height * (3/3)) + (lastFace.height * (0/3));
+  returnedFace.width = (face.width * (3/3)) + (lastFace.width * (0/3));
+  return returnedFace;
+}
 
 
 // Web Interface
