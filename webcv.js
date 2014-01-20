@@ -1,6 +1,6 @@
 var video = document.getElementById('video');
 var canvas = document.getElementById('canvas');
-var fps = 20;
+var fps = 15;
 var context = canvas.getContext('2d');
 var width = 640;
 var height = 0;
@@ -95,6 +95,6 @@ $('.button').mouseout(function () {
 
 $('.button').click(function () {
   var action = $(this).text();
-  socket.emit(action, action);
+  socket.emit('buttonClick', action);
   console.log(action);
 });

@@ -12,13 +12,20 @@ var io = require('socket.io').listen(server);
 
 var face_x = 0;
 var face_y = 0;
+var center = {x: 320, y: 210};
 
 // Physical vars
 var Board, sHoriz, sVert;
-var servoAngles = {x: 70, y: 40};
+var servoAngle = {x: 70, y: 40};
 var MOVETHRESHOLD = 50;
+var tracking = true;
 
+// PID Control vars
+var error;
 var lastError;
+var Kp = 0.9;
+var Ki = 0;
+var Kd = 1.5;
 
 // Express setup
 app.use(express.static(__dirname + '/'));
@@ -33,7 +40,8 @@ io.sockets.on('connection', function (socket) {
     data = data.split(',');
     cv.readImage(new Buffer(data[1],'base64'), function (err, im) {
       // Convert and filter the RGB image
-      im.detectObject("./node_modules/opencv/data/haarcascade_frontalface_default.xml", {}, function (err, faces) {
+      //im.detectObject("./node_modules/opencv/data/haarcascade_profileface.xml", {}, function (err, faces) {
+      im.detectObject("./lib/cv/lbpcascade_frontalface.xml", {}, function (err, faces) {
         if (faces.length > 0) {
           var largest = 0;
           if (faces.length > 1) {
@@ -48,6 +56,40 @@ io.sockets.on('connection', function (socket) {
         }
       });
     });
+  });
+
+  socket.on('buttonClick', function (action) {
+    switch(action) {
+      case 'Left':
+        console.log("[Button Pressed] moving left.")
+        servoAngle.x += 5;
+        sHoriz.to(servoAngle.x);
+        break;
+      case 'Right':
+        console.log("[Button Pressed] moving right.")
+        servoAngle.x -= 5;
+        sHoriz.to(servoAngle.x);
+        break;
+      case 'Up':
+        console.log("[Button Pressed] moving up.")
+        servoAngle.y -= 5;
+        sVert.to(servoAngle.y);
+        break;
+      case 'Down':
+        console.log("[Button Pressed] moving down.")
+        servoAngle.y += 5;
+        sVert.to(servoAngle.y);
+        break;
+      case 'Start':
+        tracking = true;
+        break;
+      case 'Stop':
+        tracking = false;
+        break;
+      default:
+        console.log("Invalid button pressed.");
+        break;
+    }
   });
 });
 
@@ -66,57 +108,44 @@ Board.on('ready', function () {
     pin: 10
   });
 
-  sHoriz.to(servoAngles.x);
-  sVert.to(servoAngles.y);
-/*
-  this.loop(100, function () {
-    //console.log(face_x + ", " + face_y);
-    var move = calculateServoAngles(face_x, face_y);
-    angleHoriz = move.h;
-    angleVert = move.v;
-    if (angleHoriz < 0) angleHoriz = 0;
-    if (angleHoriz > 160) angleHoriz = 160;
-    sHoriz.to(angleHoriz);
-    
-    if (angleVert < 0) angleVert = 0;
-    if (angleVert > 160) angleVert = 160;
-    sVert.to(angleVert);
-    
-  });
-});
-*/
+  // Move to initial positions
+  sHoriz.to(servoAngle.x);
+  sVert.to(servoAngle.y);
 });
 
 evt.on('face', function (face) {
-  face_x = face.x + face.width/2 - 320;
-  face_y = face.y + face.height/2 - 240;
+  face_x = face.x + face.width/2 - center.x;
+  face_y = face.y + face.height/2 - center.y;
   timeStamp = new Date().getTime();
-  servoAngles = calculateServoAngles(face_x, face_y, servoAngles);
-  sHoriz.to(servoAngles.x);
-  sVert.to(servoAngles.y);
-  lastError = {x: face_x, y: face_y, t: timeStamp};
+  error = {x: face_x, y: face_y, t: timeStamp};
+  var angleDelta = calculateservoAngle(error, lastError);
+  if (isNaN(angleDelta.x) || isNaN(angleDelta.y) || tracking === false) {
+    // Do nothing
+  } else {
+    servoAngle.x -= angleDelta.x;
+    servoAngle.y += angleDelta.y;
+    sHoriz.to(servoAngle.x);
+    sVert.to(servoAngle.y);
+  }
+  lastError = error;
 });
 
-function calculateServoAngles(x,y,servoAngles) {
-  var hOut, vOut;
+function calculateservoAngle(error,lastError) {
+  var xOut = 0;
+  var yOut = 0;
 
-  if (x < -1*MOVETHRESHOLD) {
-    hOut = servoAngles.x + 1;
-  } else if (x > MOVETHRESHOLD) {
-    hOut = servoAngles.x - 1;
-  } else {
-    hOut = servoAngles.x;
+  if (typeof lastError !== 'undefined') {
+    xOut = PIDController(error.x, lastError.x, error.t - lastError.t)/100;
+    yOut = PIDController(error.y, lastError.y, error.t - lastError.t)/100;
   }
 
-  if (y < -1*MOVETHRESHOLD) {
-    vOut = servoAngles.y - 1;
-  } else if (y > MOVETHRESHOLD) {
-    vOut = servoAngles.y + 1;
-  } else {
-    vOut = servoAngles.y;
-  }
+  return {x: xOut, y: yOut};
+}
 
-  console.log('[hOut, vOut] ' + hOut + ", " + vOut);
-
-  return {x: hOut, y: vOut};
+function PIDController(error, lastError, delta) {
+  var P = error;
+  var I = 0;
+  var D = (error + lastError) / delta;
+  var newError = Kp*P + Ki*I - Kd*D;
+  return newError;
 }
