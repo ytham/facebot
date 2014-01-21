@@ -114,10 +114,11 @@ Board.on('ready', function () {
 });
 
 evt.on('face', function (face) {
-  face_x = face.x + face.width/2 - center.x;
-  face_y = face.y + face.height/2 - center.y;
-  timeStamp = new Date().getTime();
-  error = {x: face_x, y: face_y, t: timeStamp};
+  error = {
+    x: face.x + face.width/2 - center.x, 
+    y: face.y + face.height/2 - center.y, 
+    t: new Date().getTime()
+  };
   var angleDelta = calculateservoAngle(error, lastError);
   if (isNaN(angleDelta.x) || isNaN(angleDelta.y) || tracking === false) {
     // Do nothing
